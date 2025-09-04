@@ -1,20 +1,50 @@
+import { db } from '../db';
 import { type UpdateVideoInput, type Video } from '../schema';
+import { sql } from 'drizzle-orm';
 
 export async function updateVideo(input: UpdateVideoInput): Promise<Video> {
-    // This is a placeholder declaration! Real code should be implemented here.
-    // The goal of this handler is updating video information in the database.
-    // Should validate video exists and user owns the video before updating.
-    return Promise.resolve({
-        id: input.id,
-        user_id: 1, // Placeholder user ID
-        title: input.title || 'Placeholder Title',
-        description: input.description || null,
-        video_url: 'https://example.com/video.mp4',
-        thumbnail_url: null,
-        duration: 60,
-        view_count: 0,
-        like_count: 0,
-        created_at: new Date(),
-        updated_at: new Date()
-    } as Video);
+  try {
+    // Check if video exists using raw SQL since schema is not available
+    const existingVideoResult = await db.execute(
+      sql`SELECT * FROM videos WHERE id = ${input.id}`
+    );
+
+    if (existingVideoResult.rows.length === 0) {
+      throw new Error('Video not found');
+    }
+
+    // Execute update directly with sql template
+    let updateQuery = sql`UPDATE videos SET updated_at = NOW()`;
+    
+    if (input.title !== undefined) {
+      updateQuery = sql`${updateQuery}, title = ${input.title}`;
+    }
+
+    if (input.description !== undefined) {
+      updateQuery = sql`${updateQuery}, description = ${input.description}`;
+    }
+
+    updateQuery = sql`${updateQuery} WHERE id = ${input.id} RETURNING *`;
+
+    const result = await db.execute(updateQuery);
+    const updatedVideo = result.rows[0] as any;
+
+    // Return the updated video with proper typing
+    return {
+      id: updatedVideo.id,
+      user_id: updatedVideo.user_id,
+      title: updatedVideo.title,
+      description: updatedVideo.description,
+      video_url: updatedVideo.video_url,
+      thumbnail_url: updatedVideo.thumbnail_url,
+      duration: updatedVideo.duration,
+      view_count: updatedVideo.view_count,
+      like_count: updatedVideo.like_count,
+      created_at: new Date(updatedVideo.created_at),
+      updated_at: new Date(updatedVideo.updated_at)
+    };
+  } catch (error) {
+    console.error('Video update failed:', error);
+    throw error;
+  }
 }
